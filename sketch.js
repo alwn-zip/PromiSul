@@ -54,13 +54,6 @@ let V = { v: "home" },
   stream2 = null,
   scheduleEditing = false,
   scheduleDraft = [];
-let tmModel = null,
-  tmBusy = false,
-  tmLast = 0,
-  tmStable = 0,
-  tmScriptPromise = null;
-const TM_URL = "https://teachablemachine.withgoogle.com/models/UPZqRBEeP/";
-const TM_TARGET_LABEL = "gesture";
 const sv = () => {
   if (APP.onSave) APP.onSave();
 };
@@ -1067,140 +1060,91 @@ function fake() {
   sv();
   R();
 }
-function loadTMscript(src) {
-  return new Promise((resolve, reject) => {
-    const existing = [...document.scripts].find((x) => x.src === src);
-    if (existing) {
-      if (existing.dataset.loaded === "1") return resolve();
-      existing.addEventListener("load", resolve, { once: true });
-      existing.addEventListener("error", reject, { once: true });
-      return;
-    }
-    const el = document.createElement("script");
-    el.src = src;
-    el.onload = () => {
-      el.dataset.loaded = "1";
-      resolve();
-    };
-    el.onerror = reject;
-    document.head.appendChild(el);
-  });
+// ───── 손동작 인식 (MediaPipe 손 관절 · 학습 없이 모양과 각도를 계산) ─────
+// 첨부 영상 기준: 검지가 아래를 향한 자세 → 손목을 돌려 검지가 위로 선 L자 (이걸 보이면 인식)
+const L_UP = 55, // L자: 검지가 수직 위에서 이 각도(°) 안이어야 해요. 인식이 안 되면 키우세요
+  L_DOWN = 100, // 시작 자세: 검지가 수직 위에서 이 각도(°) 이상 벗어나(=아래쪽을 향해) 있어야 해요
+  L_GAP_MIN = 15, // L자: 엄지와 검지가 벌어진 각도 범위(°). 카메라에서는 90°보다 작게 보여요
+  L_GAP_MAX = 110,
+  L_THUMB = 0.55, // L자: 엄지를 얼마나 펴야 하는지 (손 크기 대비). 인식이 안 되면 내리세요
+  L_SEQ_MS = 2500, // 시작 자세 후 이 시간 안에 L자가 나와야 해요
+  L_N = 2; // 같은 자세가 연속 몇 번 나와야 인식으로 치는지
+let lRun = 0,
+  lStartAt = 0,
+  lStartN = 0,
+  lLN = 0,
+  lLast = 0;
+function lPose(lm) {
+  // 검지만 펴고 나머지는 접은 손에서, 검지 방향으로 자세를 구분해요
+  const f = fingerState(lm);
+  if (!(f.i && !f.m && !f.r && !f.p)) return "";
+  const ix = lm[8].x - lm[5].x,
+    iy = lm[8].y - lm[5].y,
+    up = (Math.acos(Math.max(-1, Math.min(1, -iy / (Math.hypot(ix, iy) || 1e-6)))) * 180) / Math.PI; // 검지가 위(−y)에서 벗어난 각도
+  if (up >= L_DOWN) return "start";
+  if (up > L_UP) return "";
+  if (dst(lm[4], lm[5]) < f.size * L_THUMB) return ""; // 엄지도 펴기
+  const tx = lm[4].x - lm[2].x,
+    ty = lm[4].y - lm[2].y,
+    c = (tx * ix + ty * iy) / (Math.hypot(tx, ty) * Math.hypot(ix, iy) || 1e-6),
+    gap = (Math.acos(Math.max(-1, Math.min(1, c))) * 180) / Math.PI;
+  return gap >= L_GAP_MIN && gap <= L_GAP_MAX ? "L" : "";
 }
-// ───── 손동작 인식 (Teachable Machine) ─────
-// 클래스 구성: ① side(옆)+up(위) 두 자세를 학습하면 "옆 → 위" 순서로 인식 (권장)
-//             ② 위 이름이 없으면 기존처럼 TM_TARGET_LABEL("gesture") 한 클래스만 인식
-const TM_THRESH = 0.88; // 이 확률 이상이어야 인식으로 침 (오인식 많으면 올리고, 인식 안 되면 내리세요)
-const TM_FRAMES = 3; // 단일 클래스 모드: 연속 몇 번 인식돼야 하는지
-const TM_SEQ_MS = 2500; // 순서 모드: 옆 자세 후 이 시간 안에 위 자세가 나와야 함
-const TM_FLIP = true; // TM 사이트 웹캠은 좌우 반전으로 학습돼요. 인식이 이상하면 false로 바꿔 보세요
-let tmRun = 0,
-  tmMode = null,
-  tmSideAt = 0,
-  tmSideN = 0,
-  tmUpN = 0;
-async function startTM() {
-  const run = ++tmRun;
-  try {
-    if (!tmModel) {
-      if (!tmScriptPromise)
-        tmScriptPromise = (async () => {
-          await loadTMscript(
-            "https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js",
-          );
-          await loadTMscript(
-            "https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js",
-          );
-        })();
-      await tmScriptPromise;
-      tmModel = await tmImage.load(
-        TM_URL + "model.json",
-        TM_URL + "metadata.json",
-      );
-    }
-    const labels = tmModel.getClassLabels();
-    console.log("Teachable Machine labels:", labels);
-    const side = labels.find((x) => /^(side|옆)/i.test(x.trim())),
-      up = labels.find((x) => /^(up|위)/i.test(x.trim())),
-      target =
-        labels.find(
-          (x) =>
-            x.trim().toUpperCase() === TM_TARGET_LABEL.trim().toUpperCase(),
-        ) || labels.find((x) => /cross|교차/i.test(x));
-    if (side && up) tmMode = { side, up };
-    else if (target) tmMode = { target };
-    else {
-      toast("클래스 이름을 확인해야 해요: " + labels.join(", "));
-      return;
-    }
-    toast(
-      tmMode.target
-        ? "손동작 모델 연결 완료: " + tmMode.target
-        : "손동작 모델 연결 완료: 옆 → 위 순서로 인식해요",
-    );
-    tmStable = tmSideN = tmUpN = tmSideAt = 0;
-    tmLoop(run);
-  } catch (e) {
-    console.error("TM load/predict error", e);
-    toast("손동작 모델 연결 실패. 모델 링크와 인터넷 연결을 확인해 주세요.");
+// 영상 비율이 정사각형이 아니어도 각도가 틀어지지 않게 픽셀 좌표로 바꿔요
+const lPx = (lms, v) =>
+  lms.map((lm) =>
+    lm.map((p) => ({ x: p.x * v.videoWidth, y: p.y * v.videoHeight, z: p.z })),
+  );
+function lStep(lms) {
+  const now = Date.now();
+  let pose = "";
+  for (const lm of lms) {
+    pose = lPose(lm);
+    if (pose) break;
   }
-}
-function tmStep(preds) {
-  const top = preds.reduce((a, b) => (b.probability > a.probability ? b : a)),
-    now = Date.now(),
-    p = (n) =>
-      (preds.find((x) => x.className === n) || { probability: 0 }).probability,
-    g = $("gd");
-  if (g)
-    g.textContent =
-      "모델이 보는 것: " +
-      top.className +
-      " " +
-      Math.round(top.probability * 100) +
-      "%" +
-      (tmMode.side
-        ? tmSideAt && now - tmSideAt < TM_SEQ_MS
-          ? " · 옆 확인 → 위로!"
-          : " · 옆 자세 대기"
-        : "");
-  if (tmMode.target) {
-    if (p(tmMode.target) >= TM_THRESH) {
-      if (++tmStable >= TM_FRAMES) G = now;
-    } else tmStable = 0;
-    return;
-  }
-  if (p(tmMode.side) >= TM_THRESH) {
-    if (++tmSideN >= 2) tmSideAt = now;
-  } else tmSideN = 0;
-  if (tmSideAt && now - tmSideAt > TM_SEQ_MS) tmSideAt = 0;
-  if (p(tmMode.up) >= TM_THRESH) {
-    if (tmSideAt && ++tmUpN >= 2) {
+  if (pose === "start") {
+    if (++lStartN >= L_N) lStartAt = now;
+  } else lStartN = 0;
+  if (lStartAt && now - lStartAt > L_SEQ_MS) lStartAt = 0;
+  if (pose === "L") {
+    if (lStartAt && ++lLN >= L_N) {
       G = now;
-      tmSideAt = tmUpN = 0;
+      lStartAt = lLN = 0;
     }
-  } else tmUpN = 0;
+  } else lLN = 0;
+  const g = $("gd");
+  if (g)
+    g.textContent = pose
+      ? "손 인식 · " +
+        (pose === "start" ? "시작 자세" : "L자") +
+        (lStartAt ? " · 확인 → 손목을 돌려 L자로!" : "")
+      : "손 동작을 보여 주세요";
 }
-async function tmLoop(run) {
-  if (run !== tmRun || !M || V.v !== "home" || !tmModel) return;
+async function startL() {
+  const run = ++lRun;
+  try {
+    await loadHL();
+  } catch (e) {
+    console.error("HandLandmarker load error", e);
+    return toast("손 인식 모델 연결 실패. 인터넷 연결을 확인해 주세요.");
+  }
+  if (run !== lRun) return;
+  lStartAt = lStartN = lLN = 0;
+  lLoop(run);
+}
+function lLoop(run) {
+  if (run !== lRun || !M || V.v !== "home" || !hl) return;
   const v = $("cam"),
     now = performance.now();
-  if (
-    v &&
-    now - tmLast >= 130 &&
-    !tmBusy &&
-    v.readyState >= 2 &&
-    v.videoWidth
-  ) {
-    tmLast = now;
-    tmBusy = true;
+  if (v && now - lLast >= 100 && v.readyState >= 2 && v.videoWidth) {
+    lLast = now;
     try {
-      tmStep(await tmModel.predict(v, TM_FLIP));
+      lStep(lPx(hl.detectForVideo(v, now).landmarks || [], v));
     } catch (e) {
-      console.warn("TM prediction failed", e);
-    } finally {
-      tmBusy = false;
+      console.warn("hand detect failed", e);
     }
   }
-  requestAnimationFrame(() => tmLoop(run));
+  requestAnimationFrame(() => lLoop(run));
 }
 async function startMedia() {
   try {
@@ -1222,7 +1166,7 @@ async function startMedia() {
     const go2 = () => {
       if (!started) {
         started = true;
-        startTM();
+        startL();
       }
     };
     v.srcObject = M;
