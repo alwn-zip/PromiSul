@@ -159,7 +159,10 @@ function R() {
   $("top").innerHTML =
     `<div class="top">${V.v != "home" ? '<button class="u" onclick="back()" aria-label="뒤로">←</button>' : ""}<b>${TT[V.v]}</b><span class="av" style="width:42px;height:42px;font-size:23px;background:${CL[S.me]}" title="${h(nm(S.me))}">${me().e}</span><button class="u" onclick="APP.logout&&APP.logout()" aria-label="로그아웃">로그아웃</button></div>`;
   $("app").innerHTML = VW[V.v]();
-  if (V.v == "home" && M && $("cam")) $("cam").srcObject = M;
+  if (V.v == "home" && M && $("cam")) {
+    $("cam").srcObject = M;
+    $("cam").parentElement.classList.add("on"); // 카메라가 켜지면 안내 사진은 숨겨요
+  }
   if (V.v == "cam") startCam();
   if (V.v == "start") startHandCam("sv", "start");
   if (V.v == "drunk" && DRK.ph === "aim") startHandCam("dv", "drunk");
@@ -1061,35 +1064,28 @@ function fake() {
   R();
 }
 // ───── 손동작 인식 (MediaPipe 손 관절 · 학습 없이 모양과 각도를 계산) ─────
-// 첨부 영상 기준: 검지가 아래를 향한 자세 → 손목을 돌려 검지가 위로 선 L자 (이걸 보이면 인식)
-const L_UP = 55, // L자: 검지가 수직 위에서 이 각도(°) 안이어야 해요. 인식이 안 되면 키우세요
-  L_DOWN = 100, // 시작 자세: 검지가 수직 위에서 이 각도(°) 이상 벗어나(=아래쪽을 향해) 있어야 해요
-  L_GAP_MIN = 15, // L자: 엄지와 검지가 벌어진 각도 범위(°). 카메라에서는 90°보다 작게 보여요
-  L_GAP_MAX = 110,
-  L_THUMB = 0.55, // L자: 엄지를 얼마나 펴야 하는지 (손 크기 대비). 인식이 안 되면 내리세요
-  L_SEQ_MS = 2500, // 시작 자세 후 이 시간 안에 L자가 나와야 해요
-  L_N = 2; // 같은 자세가 연속 몇 번 나와야 인식으로 치는지
+// 엄지와 검지를 뻗은 L자 손을 잠깐 유지하다가, 손목 스냅으로 방향이 확 바뀌면(눕혔다 세우기) 인식해요.
+// 왼손·오른손, 시작 각도, 돌리는 방향은 상관없어요.
+const L_ROT = 60, // 이 각도(°) 이상 확 돌아가야 인식. 인식이 안 되면 내리고, 엉뚱하게 잡히면 올리세요
+  L_STEADY = 25, // 기준 자세로 보는 흔들림 범위(°)
+  L_THUMB = 0.45, // 엄지를 얼마나 펴야 L자로 보는지 (손 크기 대비). 인식이 안 되면 내리세요
+  L_SEQ_MS = 2500, // 기준 자세를 마지막으로 본 뒤 이 시간 안에 돌려야 해요
+  L_N = 2; // 같은 상태가 연속 몇 번 나와야 인정하는지
 let lRun = 0,
-  lStartAt = 0,
-  lStartN = 0,
-  lLN = 0,
+  lRef = null,
+  lRefAt = 0,
+  lCand = null,
+  lCandN = 0,
+  lMoveN = 0,
   lLast = 0;
-function lPose(lm) {
-  // 검지만 펴고 나머지는 접은 손에서, 검지 방향으로 자세를 구분해요
+function lIsL(lm) {
+  // 검지와 엄지는 펴고 나머지 세 손가락은 접은 손
   const f = fingerState(lm);
-  if (!(f.i && !f.m && !f.r && !f.p)) return "";
-  const ix = lm[8].x - lm[5].x,
-    iy = lm[8].y - lm[5].y,
-    up = (Math.acos(Math.max(-1, Math.min(1, -iy / (Math.hypot(ix, iy) || 1e-6)))) * 180) / Math.PI; // 검지가 위(−y)에서 벗어난 각도
-  if (up >= L_DOWN) return "start";
-  if (up > L_UP) return "";
-  if (dst(lm[4], lm[5]) < f.size * L_THUMB) return ""; // 엄지도 펴기
-  const tx = lm[4].x - lm[2].x,
-    ty = lm[4].y - lm[2].y,
-    c = (tx * ix + ty * iy) / (Math.hypot(tx, ty) * Math.hypot(ix, iy) || 1e-6),
-    gap = (Math.acos(Math.max(-1, Math.min(1, c))) * 180) / Math.PI;
-  return gap >= L_GAP_MIN && gap <= L_GAP_MAX ? "L" : "";
+  return f.i && !f.m && !f.r && !f.p && dst(lm[4], lm[5]) >= f.size * L_THUMB;
 }
+const lAngle = (lm) =>
+  (Math.atan2(lm[8].y - lm[5].y, lm[8].x - lm[5].x) * 180) / Math.PI; // 검지가 가리키는 방향
+const lDiff = (a, b) => Math.abs(((a - b + 540) % 360) - 180); // 두 방향의 차이(0~180°)
 // 영상 비율이 정사각형이 아니어도 각도가 틀어지지 않게 픽셀 좌표로 바꿔요
 const lPx = (lms, v) =>
   lms.map((lm) =>
@@ -1097,28 +1093,49 @@ const lPx = (lms, v) =>
   );
 function lStep(lms) {
   const now = Date.now();
-  let pose = "";
-  for (const lm of lms) {
-    pose = lPose(lm);
-    if (pose) break;
-  }
-  if (pose === "start") {
-    if (++lStartN >= L_N) lStartAt = now;
-  } else lStartN = 0;
-  if (lStartAt && now - lStartAt > L_SEQ_MS) lStartAt = 0;
-  if (pose === "L") {
-    if (lStartAt && ++lLN >= L_N) {
-      G = now;
-      lStartAt = lLN = 0;
+  let ang = null;
+  for (const lm of lms)
+    if (lIsL(lm)) {
+      ang = lAngle(lm);
+      break;
     }
-  } else lLN = 0;
+  if (lRef !== null && now - lRefAt > L_SEQ_MS) lRef = null;
+  let d = 0;
+  if (ang === null) lCandN = 0; // 손이 잠깐 안 보여도(스냅 순간 흐려짐) 기준 자세는 시간 안에서는 유지
+  else if (lRef === null) {
+    // 기준 자세 잡기: 비슷한 각도로 연속 N번
+    if (lCand !== null && lDiff(ang, lCand) <= L_STEADY) {
+      if (++lCandN >= L_N) {
+        lRef = ang;
+        lRefAt = now;
+        lMoveN = 0;
+      }
+    } else {
+      lCand = ang;
+      lCandN = 1;
+    }
+  } else {
+    d = lDiff(ang, lRef);
+    if (d <= L_STEADY) {
+      lRef = ang;
+      lRefAt = now;
+      lMoveN = 0;
+    } else if (d >= L_ROT) {
+      if (++lMoveN >= L_N) {
+        G = now;
+        lRef = lCand = null;
+        lCandN = lMoveN = 0;
+      }
+    } else lMoveN = 0;
+  }
   const g = $("gd");
   if (g)
-    g.textContent = pose
-      ? "손 인식 · " +
-        (pose === "start" ? "시작 자세" : "L자") +
-        (lStartAt ? " · 확인 → 손목을 돌려 L자로!" : "")
-      : "손 동작을 보여 주세요";
+    g.textContent =
+      ang === null
+        ? "엄지와 검지를 뻗은 L자 손을 보여 주세요"
+        : lRef === null
+          ? "L자 인식 · 잠깐 그대로 유지해 주세요"
+          : "기준 자세 확인 · 손목을 꺾어 돌려 보세요!";
 }
 async function startL() {
   const run = ++lRun;
@@ -1129,7 +1146,8 @@ async function startL() {
     return toast("손 인식 모델 연결 실패. 인터넷 연결을 확인해 주세요.");
   }
   if (run !== lRun) return;
-  lStartAt = lStartN = lLN = 0;
+  lRef = lCand = null;
+  lCandN = lMoveN = 0;
   lLoop(run);
 }
 function lLoop(run) {
@@ -1150,7 +1168,7 @@ async function startMedia() {
   try {
     M = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "user" },
-      audio: true,
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
     });
   } catch (e) {
     try {
@@ -1170,11 +1188,13 @@ async function startMedia() {
       }
     };
     v.srcObject = M;
+    v.parentElement.classList.add("on");
     v.onloadeddata = go2;
     if (v.readyState >= 2) go2();
   } else toast("손동작 인식에는 카메라 권한이 필요해요");
   try {
     AC = new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === "suspended") AC.resume().catch(() => {}); // 아이폰은 마이크가 잠들어 있을 수 있어요
     const an = AC.createAnalyser();
     an.fftSize = 1024;
     AC.createMediaStreamSource(M).connect(an);
@@ -1186,7 +1206,7 @@ async function startMedia() {
       let pk = 0;
       for (const x of buf) pk = Math.max(pk, Math.abs(x));
       const n = Date.now();
-      if (pk > 0.2 && pk > base * 5 && n - lastHit > 500) {
+      if (pk > SND_PEAK && pk > base * SND_RATIO && n - lastHit > 500) {
         lastHit = n;
         SD = n;
       } else base = base * 0.97 + Math.min(pk, 0.3) * 0.03;
@@ -1196,15 +1216,24 @@ async function startMedia() {
     toast("마이크를 시작하지 못했어요");
   }
 }
+// '똑!' 소리 민감도: 인식이 안 되면 SND_PEAK를 내리고, 말소리에 반응하면 올리세요
+const SND_PEAK = 0.12,
+  SND_RATIO = 4;
+document.addEventListener("pointerdown", () => {
+  if (AC && AC.state === "suspended") AC.resume().catch(() => {});
+});
 function tick() {
   if (V.v != "home" || !$("cg")) return;
+  if (AC && AC.state === "suspended") AC.resume().catch(() => {});
   const n = Date.now(),
     g = n - G < 4000,
     s = n - SD < 4000;
   $("cg").className = "chip " + (g ? "ok" : "");
   $("cg").textContent = "👆 손 제스처 " + (g ? "인식됨" : "대기");
   $("cs").className = "chip " + (s ? "ok" : "");
-  $("cs").textContent = "🔊 ‘똑!’ " + (s ? "인식됨" : "대기");
+  $("cs").textContent =
+    "🔊 ‘똑!’ " +
+    (s ? "인식됨" : AC && AC.state === "suspended" ? "마이크 깨우는 중 · 화면을 탭하세요" : "대기");
   if (g && s) fire();
 }
 setInterval(tick, 200);
