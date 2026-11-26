@@ -379,17 +379,6 @@ ${p.st == "ended" ? `<button class="btn pri" onclick="openRec(${p.id})">📖 아
         new Date(b.date + "T" + (b.time || "00:00")) -
         new Date(a.date + "T" + (a.time || "00:00")),
     );
-    const ph = l.reduce((n, p) => n + (p.ph || []).length, 0),
-      tt = {};
-    l.forEach((p) =>
-      Object.entries(p.tot || {}).forEach(
-        ([k, v]) => (tt[k] = (tt[k] || 0) + v),
-      ),
-    );
-    const ts = Object.entries(tt)
-      .filter((x) => x[1] > 0)
-      .map(([k, v]) => `<span class="chip y">${h(k)} ${v}병</span>`)
-      .join("");
     let last = "",
       out = "";
     l.forEach((p) => {
@@ -411,9 +400,9 @@ ${p.st == "ended" ? `<button class="btn pri" onclick="openRec(${p.id})">📖 아
               .map((x) => `<div><img src="${x}" alt="사진"></div>`)
               .join("")}</div>`
           : ""
-      }<div style="margin-top:6px">${dr || '<span class="sm">음주량 기록 없음</span>'}</div>${m ? `<div class="sm" style="margin-top:6px">📝 ${h(m.slice(0, 40))}</div>` : ""}<div class="sm" style="margin-top:6px">제안 ${h(nm(p.by))} · 사진 ${n}장 · 열기 ›</div></div>`;
+      }<div style="margin-top:6px">${dr || '<span class="sm">음주량 기록 없음</span>'}</div>${m ? `<div class="sm" style="margin-top:6px">📝 ${h(m.slice(0, 40))}</div>` : ""}</div>`;
     });
-    return `<div class="card"><h3>🗂 종료된 술약</h3><b>${l.length}번</b> · 사진 ${ph}장<div style="margin-top:6px">${ts || '<span class="sm">누적 음주량 기록 없음</span>'}</div></div>${out || '<div class="card sm">종료된 술약이 아직 없어요. 술자리 종료를 누르면 이곳에 저장돼요.</div>'}`;
+    return `${out || '<div class="card sm">종료된 술약이 아직 없어요. 술자리 종료를 누르면 이곳에 저장돼요.</div>'}`;
   },
 };
 const pc = (p) =>
@@ -598,8 +587,6 @@ function recPage(p, ed) {
   const strip = `<div class="ps">${ph.map((x, i) => `<div class="pt"><img src="${x}" alt="사진">${ed ? `<button class="dk x" onclick="upd(()=>P().ph.splice(${i},1))" aria-label="사진 삭제">×</button>` : ""}</div>`).join("")}${ed ? `<label class="pt add2">＋ 사진 추가<input type="file" accept="image/*" multiple hidden onchange="gal(this.files)"></label>` : ph.length ? "" : '<div class="pt add2">사진 없음</div>'}</div>`;
   const head = `<div class="bx"><div class="row2"><div class="tt">${ed ? `<input class="dki" value="${h(p.title)}" maxlength="30" placeholder="제목" oninput="P().title=this.value;sv()">` : h(p.title) || '<span class="s2">제목 없음</span>'}</div><div class="s2">${p.date.replace(/-/g, ".")} (${dw})</div></div>${ed ? `<textarea class="memo" rows="5" placeholder="셋이 함께 쓰는 기록 내용" oninput="P().memo=this.value;sv()">${h(p.memo)}</textarea>` : `<div class="memo">${h(p.memo) || '<span class="s2">아직 적은 내용이 없어요. ‘기록 수정’에서 적어 보세요.</span>'}</div>`}</div>`;
   const dr = `<div class="bx"><div class="dl">주종 · 병 수</div>${ed ? [...new Set([...DR, ...Object.keys(p.tot || {})])].map((d) => `<div class="sr"><span>${h(d)}</span><button class="dk" onclick="tot('${d}',-1)" aria-label="${h(d)} 줄이기">−</button><b>${(p.tot || {})[d] || 0}</b><button class="dk" onclick="tot('${d}',1)" aria-label="${h(d)} 늘리기">＋</button></div>`).join("") + `<div class="sr"><input id="tn" class="dki" placeholder="직접 입력" style="min-width:0"><button class="dk" onclick="addT()" aria-label="추가">＋</button></div>` : tt.map(([k, v]) => `<div>${h(k)} <b>${v}병</b></div>`).join("") || '<span class="s2">기록 없음</span>'}</div>`;
-  const ut = ks.filter((k) => l.until && l.until[k]),
-    pre = ks.filter((k) => l.pre && l.pre[k]);
   if (!p.rounds)
     p.rounds = l.place ? [{ place: l.place, addr: l.addr || "" }] : [];
   const rd = ed
@@ -621,7 +608,7 @@ function recPage(p, ed) {
   const kr = ed
     ? `<button class="dk ${p.kr === true ? "on" : ""}" onclick="upd(()=>P().kr=true)">드감</button> <button class="dk ${p.kr === false ? "on" : ""}" onclick="upd(()=>P().kr=false)">안드감</button>`
     : "🎤 " + (p.kr === true ? "드감" : p.kr === false ? "안드감" : "미정");
-  const side = `<div class="bx"><div class="dl">장소</div>${rd}<div class="dl">노래방</div>${kr}<div class="dl">부차적 요소</div>${pre.map((k) => `<div>${h(nm(k))} 합류 전: ${h(l.pre[k])}</div>`).join("")}${ut.map((k) => `<div>${h(nm(k))} ~${h(l.until[k])}</div>`).join("")}${!pre.length && !ut.length ? '<span class="s2">없음</span>' : ""}</div>`;
+  const side = `<div class="bx"><div class="dl">장소</div>${rd}<div class="dl">노래방</div>${kr}</div>`;
   const pay = `<div class="bx"><div class="dl">정산 금액</div>${p.pay && p.pay.t ? `<div class="tt">${won(p.pay.t)}</div>${payHTML(p.pay, calc(p.pay.t, p.pay.x))}` : '<span class="s2">정산 전이에요</span>'}${ed ? `<div><button class="dk" onclick="go('pay',${p.id})">정산 입력·수정</button></div>` : ""}</div>`;
   const dkBox = p.drunk
     ? `<div class="bx"><div class="dl">🍺 오늘의 만취자</div><div class="pt" style="width:62%"><img src="${p.drunk.img}" alt="오늘의 만취자"></div>${ed ? `<div style="margin-top:8px"><button class="dk" onclick="openDrunk(${p.id})">다시 찍기</button> <button class="dk" onclick="upd(()=>delete P().drunk)">삭제</button></div>` : ""}</div>`
