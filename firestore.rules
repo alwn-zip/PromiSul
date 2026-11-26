@@ -43,15 +43,21 @@ service cloud.firestore {
               && newV.diff(oldV).affectedKeys().hasOnly([me()]));
       }
 
-      // 상태 변경: 성립/취소는 제안자만(성립은 찬성 1명 이상), 시작(성립→진행 중)과 종료는 누구나
+      // 응답한 사람(제안자는 찬성으로 쳐요)이 모두 찬성인지
+      function yes(x) {
+        return x == resource.data.by
+          || request.resource.data.get('votes', {}).get(x, '') == 'y';
+      }
+
+      // 상태 변경: 세 명이 모두 찬성하면 누구 기기에서든 자동 성립, 제안 취소는 제안자만,
+      // 시작(성립→진행 중)과 종료는 누구나
       function stateOk() {
         let o = resource.data.st;
         let n = request.resource.data.st;
         return o == n
-          || (o == 'pending' && me() == resource.data.by
-              && (n == 'cancelled'
-                  || (n == 'confirmed'
-                      && request.resource.data.get('votes', {}).values().hasAny(['y']))))
+          || (o == 'pending' && me() == resource.data.by && n == 'cancelled')
+          || (o == 'pending' && n == 'confirmed'
+              && yes('A') && yes('B') && yes('C'))
           || (o == 'confirmed' && n == 'live')
           || (o == 'live' && n == 'ended')
           || (o == 'confirmed' && n == 'ended');

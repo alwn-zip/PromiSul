@@ -102,6 +102,8 @@ export function createSync({ win, fs, db, me }) {
     const st = build();
     APP.setS(st);
     S0 = clone(st);
+    // 두 사람이 거의 동시에 찬성해서 서로의 응답을 못 봤다면, 먼저 알아챈 기기가 성립시켜요
+    if (APP.autoConfirm && APP.autoConfirm()) onSave();
     hard ? APP.render() : softRender();
   }
   const maybeApply = () => started && apply(false);

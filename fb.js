@@ -6,7 +6,7 @@ import {
 import {
   getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, addDoc, deleteDoc, deleteField, FieldPath,
 } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
-import { createSync } from "./sync.js?v=3";
+import { createSync } from "./sync.js?v=4";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCYPMUk1daN7OPukDLFKWIrFg0huIZrAxI",

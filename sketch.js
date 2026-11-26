@@ -326,7 +326,7 @@ ${
         .join("")}</details>`
     : ""
 }
-${isP && p.st == "pending" ? (ys ? `<p class="sm">친구 ${ys}명이 찬성했어요. </p><div class="row"><button class="btn grn" onclick="decide('confirmed')">술약 성립</button><button class="btn" onclick="decide('cancelled')">성립 안 함</button></div>` : `<p class="sm">최소 한 명이 찬성하면 성립 여부를 결정할 수 있어요.</p><button class="btn" onclick="decide('cancelled')">제안 취소</button>`) : ""}</div>
+${p.st == "pending" ? `<p class="sm">친구 ${ys}명이 찬성했어요. 모두 찬성하면 자동으로 성립돼요.</p>${isP ? `<button class="btn" onclick="decide('cancelled')">제안 취소</button>` : ""}` : ""}</div>
 ${p.st == "confirmed" ? `<button class="btn pri" onclick="go('plan',${p.id})">📝계획📝</button><button class="btn grn" onclick="openStart(${p.id})">🥂드가자🥂</button>` : ""}
 ${p.st == "live" ? liveTiles(p) : ""}
 ${p.st == "ended" ? `<button class="btn pri" onclick="openRec(${p.id})">📖 아카이브 </button><button class="btn" onclick="go('pay',${p.id})">💸 정산</button>` : ""}`;
@@ -500,7 +500,24 @@ function addP() {
   R();
   scrollTo(0, 0);
 }
-const vote = (v) => upd(() => (P().votes[S.me] = v)),
+const allYes = (p) =>
+  ["A", "B", "C"].every((k) => k == p.by || p.votes[k] == "y");
+APP.autoConfirm = () => {
+  let ch = false;
+  S.P.forEach((p) => {
+    if (p.st == "pending" && allYes(p)) {
+      p.st = "confirmed";
+      ch = true;
+    }
+  });
+  return ch;
+};
+const vote = (v) =>
+    upd(() => {
+      const p = P();
+      p.votes[S.me] = v;
+      if (p.st == "pending" && allYes(p)) p.st = "confirmed";
+    }),
   voteAs = (k, v) =>
     upd(() => {
       if (v) P().votes[k] = v;
