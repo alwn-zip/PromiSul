@@ -161,7 +161,7 @@ function R() {
     V = { v: "home" };
   }
   $("top").innerHTML =
-    `<div class="top">${V.v != "home" ? '<button class="u" onclick="back()" aria-label="뒤로">←</button>' : ""}<b>${TT[V.v]}</b><span class="u on" style="cursor:default" title="${h(nm(S.me))}">${S.me}</span><button class="u" onclick="APP.logout&&APP.logout()" aria-label="로그아웃">로그아웃</button></div>`;
+    `<div class="top">${V.v != "home" ? '<button class="u" onclick="back()" aria-label="뒤로">←</button>' : ""}<b>${TT[V.v]}</b><span class="av" style="width:42px;height:42px;font-size:23px;background:${CL[S.me]}" title="${h(nm(S.me))}">${me().e}</span><button class="u" onclick="APP.logout&&APP.logout()" aria-label="로그아웃">로그아웃</button></div>`;
   $("app").innerHTML = VW[V.v]();
   if (V.v == "home" && M && $("cam")) $("cam").srcObject = M;
   if (V.v == "cam") startCam();
@@ -225,20 +225,18 @@ const VW = {
 <h2>친구들</h2>${["A", "B", "C"]
       .map((k) => {
         const u = S.users[k];
-        return `<div class="card fr" onclick="go('profile','${k}')">${av(k)}<div><b>${h(u.n)}</b> ${k == S.me ? '<span class="chip">나</span>' : ""}<br><span class="chip ${FC[u.f]}">${u.f}</span><span class="sm">${h(u.a) || "귀가 주소 미등록"}</span></div><span>›</span></div>`;
+        return `<div class="card fr" onclick="go('profile','${k}')">${av(k)}<div><b>${h(u.n)}</b> ${k == S.me ? '<span class="chip">나</span>' : ""}<br><span class="chip ${FC[u.f]}">${u.f}</span></div><span>›</span></div>`;
       })
       .join("")}
-<div class="card"><h3>📅 본가 방문 일정</h3>${calendarGrid()}</div>${songCard()}
-${favCard()}<h2 style="margin-top:20px">술약 현황</h2>${
+<h2 style="margin-top:20px">술약 현황</h2>${
       ps
-        .filter((p) => p.st != "ended")
+        .filter((p) => p.st != "ended" && p.st != "cancelled")
         .map(pc)
         .join("") ||
       '<div class="card sm">아직 술약이 없어요. 제스처로 첫 술약을 제안해 보세요.</div>'
     }
-<button class="btn" onclick="go('arc')">🗂 지난 술약 아카이브</button>
-
-<p class="sm" style="margin-top:18px">로그인한 계정: ${h(nm(S.me))} · 데이터는 세 명이 실시간으로 함께 써요.</p>`;
+<div class="card"><h3>📅 본가 방문 일정</h3>${calendarGrid()}</div>${songCard()}
+${favCard()}<button class="btn" onclick="go('arc')">🗂 지난 술약 아카이브</button>`;
   },
   profile() {
     const k = V.id,
@@ -247,7 +245,7 @@ ${favCard()}<h2 style="margin-top:20px">술약 현황</h2>${
     return `<div class="card fr">${av(k)}<div><b>${h(u.n)}</b><br><span class="sm">${own ? "내 프로필" : "친구 프로필 · 읽기 전용"}</span></div></div>
  ${
    own
-     ? `<div class="card"><h3>이름 · 이미지</h3><input value="${h(u.n)}" maxlength="12" onchange="upd(()=>S.users['${k}'].n=this.value.trim()||S.users['${k}'].n)"><div style="margin-top:8px">${EM.map((e) => `<button class="btn sm" onclick="upd(()=>S.users['${k}'].e='${e}')">${e}</button>`).join("")}</div></div>
+     ? `<div class="card"><input aria-label="이름" value="${h(u.n)}" maxlength="12" onchange="upd(()=>S.users['${k}'].n=this.value.trim()||S.users['${k}'].n)"><div style="margin-top:8px">${EM.map((e) => `<button class="btn sm ${u.e == e ? "grn" : ""}" onclick="upd(()=>S.users['${k}'].e='${e}')">${e}</button>`).join("")}</div></div>
  <div class="card"><h3>재정 상태</h3>${FN.map((f) => `<button class="btn sm ${u.f == f ? (FC[f] === "ok" ? "grn" : "pri") : ""}" onclick="upd(()=>S.users['${k}'].f='${f}')">${f}${u.f == f ? " ✓" : ""}</button>`).join("")}<p class="sm">바꾸기 전까지 유지돼요.</p></div>
  <div class="card"><h3>귀가 주소</h3><input value="${h(u.a)}" placeholder="예: 서울시 ○○구 ○○동" onchange="upd(()=>S.users['${k}'].a=this.value.trim())"></div><div class="card"><h3>계좌번호</h3><input value="${h(u.bank || "")}" placeholder="은행명 계좌번호" maxlength="40" onchange="upd(()=>S.users['${k}'].bank=this.value.trim())"><p class="sm">프로필당 계좌 하나만 등록할 수 있어요. 수정하면 기존 계좌번호가 변경돼요.</p></div>
  <div class="card"><h3>노래방 선곡 (${u.s.length}곡)</h3><div class="row"><input id="profileSong" placeholder="곡 제목 - 가수" style="flex:3" onkeydown="if(event.key=='Enter')addSong('${k}')"><button class="btn sm" style="flex:1;margin-top:6px" onclick="addSong('${k}')">추가</button></div>${u.s.map((song, i) => `<div class="row" style="margin-top:6px"><span style="flex:4">🎵 ${h(song)}</span><button class="btn sm" onclick="upd(()=>S.users['${k}'].s.splice(${i},1))">삭제</button></div>`).join("") || '<span class="sm">등록된 곡이 없어요</span>'}</div>`
@@ -504,7 +502,16 @@ const vote = (v) => upd(() => (P().votes[S.me] = v)),
       if (v) P().votes[k] = v;
       else delete P().votes[k];
     }),
-  decide = (s) => upd(() => (P().st = s));
+  decide = (s) => {
+    if (s === "cancelled") {
+      P().st = s; // 서버에서 제안자가 바로 지워요
+      sv();
+      hist = [];
+      V = { v: "home" };
+      R();
+      toast("성립되지 않아 삭제했어요");
+    } else upd(() => (P().st = s));
+  };
 function liveTiles(p) {
   const l = p.pl || {},
     tile = (cls, bg, ico, label, sub, on) =>
@@ -632,7 +639,7 @@ function endP() {
   });
 }
 function favCard() {
-  return `<div class="card"><h3>⭐ 즐겨찾기 장소</h3>${S.fav.map((f, i) => `<div class="row" style="margin:6px 0"><span style="flex:4">${/^https?:\/\//.test(f.link || "") ? `<a href="${h(f.link)}" target="_blank" rel="noopener">📍 ${h(f.n)}</a>` : "📍 " + h(f.n)}</span><button class="btn sm" onclick="delFav(${i})" aria-label="${h(f.n)} 삭제">삭제</button></div>`).join("") || '<p class="sm">자주 가는 곳을 등록해 두면 계획에서 탭 한 번으로 골라요</p>'}<div class="row"><input id="fn" placeholder="이름" style="flex:2"><input id="fl" placeholder="지도 링크(선택)" style="flex:3"></div><button class="btn" onclick="addFav()">＋ 즐겨찾기 추가</button></div>`;
+  return `<div class="card"><h3>⭐ 즐겨찾기 장소</h3>${S.fav.map((f, i) => `<div class="row" style="margin:6px 0"><span style="flex:4">${/^https?:\/\//.test(f.link || "") ? `<a href="${h(f.link)}" target="_blank" rel="noopener">📍 ${h(f.n)}</a>` : "📍 " + h(f.n)}</span><button class="btn sm" style="flex:none;width:34px;min-width:34px;min-height:34px;padding:0;margin:0" onclick="delFav(${i})" aria-label="${h(f.n)} 삭제">✕</button></div>`).join("") || '<p class="sm">자주 가는 곳을 등록해 두면 계획에서 탭 한 번으로 골라요</p>'}<div class="row"><input id="fn" placeholder="이름" style="flex:2"><input id="fl" placeholder="지도 링크(선택)" style="flex:3"></div><button class="btn" onclick="addFav()">＋ 즐겨찾기 추가</button></div>`;
 }
 function readFav() {
   const n = $("fn").value.trim(),

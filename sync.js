@@ -40,6 +40,7 @@ export function createSync({ win, fs, db, me }) {
   const cache = { users: {}, fav: null, props: {}, photos: {} },
     unsubs = [],
     photoSubs = {},
+    deleting = new Set(),
     ready = { users: new Set(), fav: false, props: false };
   let started = false,
     stopped = false,
@@ -66,6 +67,7 @@ export function createSync({ win, fs, db, me }) {
     }
     sl.sort((a, b) => a.at - b.at);
     const P = Object.entries(cache.props)
+      .filter(([, d]) => d.st !== "cancelled") // 성립 안 됨은 숨기고, 제안자 기기가 서버에서 지워요
       .map(([id, d]) => {
         const ph = (cache.photos[id] || [])
           .slice()
@@ -230,8 +232,24 @@ export function createSync({ win, fs, db, me }) {
       onSnapshot(
         collection(db, "proposals"),
         (snap) => {
+          const np = {};
+          snap.forEach((d) => (np[d.id] = d.data()));
+          cache.props = np;
+          for (const id of Object.keys(photoSubs))
+            if (!np[id]) {
+              photoSubs[id]();
+              delete photoSubs[id];
+              delete cache.photos[id];
+            }
           snap.forEach((d) => {
-            cache.props[d.id] = d.data();
+            const x = np[d.id];
+            if (x.st === "cancelled" && x.by === me && !deleting.has(d.id)) {
+              deleting.add(d.id);
+              deleteDoc(doc(db, "proposals", d.id)).catch((e) => {
+                deleting.delete(d.id);
+                console.error(e);
+              });
+            }
             if (!photoSubs[d.id])
               photoSubs[d.id] = onSnapshot(
                 collection(db, "proposals", d.id, "photos"),

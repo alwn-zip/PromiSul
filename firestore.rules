@@ -1,0 +1,95 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── 허용 계정: 이 세 UID만 읽고 쓸 수 있어요. 앱에서 쓰는 이름(A·B·C)으로 바꿔 읽어요 ──
+    function members() {
+      return {
+        'FUSKJPJluqh5OOEa3bOLX6xm7ps1': 'A',
+        'qQeQmzwjdrZV7tvA3sPFR0FOP642': 'B',
+        '71u7pI80r9P4fFpVyXBX3jHMV8j2': 'C'
+      };
+    }
+    function isMember() {
+      return request.auth != null && request.auth.uid in members();
+    }
+    // 로그인한 사람의 이름 ('A' | 'B' | 'C')
+    function me() {
+      return members()[request.auth.uid];
+    }
+
+    // ── 프로필(재정 상태·주소·계좌·선곡·방문 일정): 읽기는 세 명, 쓰기는 본인 문서만 ──
+    // 문서 이름이 곧 A / B / C 예요: users/A, users/B, users/C
+    match /users/{who} {
+      allow read: if isMember();
+      allow create, update: if isMember() && who == me();
+      allow delete: if false;
+    }
+
+    // ── 공용 즐겨찾기 장소: 세 명 모두 읽고 쓸 수 있어요 (meta/fav) ──
+    match /meta/{doc} {
+      allow read, write: if isMember() && doc == 'fav';
+    }
+
+    // ── 술약 ──
+    match /proposals/{pid} {
+
+      // 찬성/반대: 제안 대기 중일 때 내 칸(votes.나)만 바꿀 수 있어요
+      function votesOk() {
+        let oldV = resource.data.get('votes', {});
+        let newV = request.resource.data.get('votes', {});
+        return oldV == newV
+          || (resource.data.st == 'pending'
+              && newV.diff(oldV).affectedKeys().hasOnly([me()]));
+      }
+
+      // 상태 변경: 성립/취소는 제안자만(성립은 찬성 1명 이상), 시작(성립→진행 중)과 종료는 누구나
+      function stateOk() {
+        let o = resource.data.st;
+        let n = request.resource.data.st;
+        return o == n
+          || (o == 'pending' && me() == resource.data.by
+              && (n == 'cancelled'
+                  || (n == 'confirmed'
+                      && request.resource.data.get('votes', {}).values().hasAny(['y']))))
+          || (o == 'confirmed' && n == 'live')
+          || (o == 'live' && n == 'ended')
+          || (o == 'confirmed' && n == 'ended');
+      }
+
+      // 정산 완료 체크: 결제자만 바꿀 수 있어요
+      function doneOk() {
+        let oldPay = resource.data.get('pay', {});
+        let newPay = request.resource.data.get('pay', {});
+        return oldPay.get('done', {}) == newPay.get('done', {})
+          || oldPay.get('who', newPay.get('who', me())) == me();
+      }
+
+      allow read: if isMember();
+
+      // 제안자는 로그인한 본인으로 고정돼요
+      allow create: if isMember()
+        && request.resource.data.by == me()
+        && request.resource.data.st == 'pending'
+        && request.resource.data.get('votes', {}) == {};
+
+      allow update: if isMember()
+        && request.resource.data.by == resource.data.by
+        && votesOk() && stateOk() && doneOk();
+
+      // 성립 안 됨(cancelled)으로 바뀐 술약은 제안자가 바로 지울 수 있어요
+      allow delete: if isMember()
+        && resource.data.by == me()
+        && resource.data.st == 'cancelled';
+
+      // 사진: 작게 줄인 이미지를 문서 하나에 한 장씩 저장 (Storage 대신)
+      match /photos/{photoId} {
+        allow read, delete: if isMember();
+        allow create: if isMember()
+          && request.resource.data.by == me()
+          && request.resource.data.data.size() < 300000;
+        allow update: if false;
+      }
+    }
+  }
+}
