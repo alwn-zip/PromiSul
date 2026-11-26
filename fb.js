@@ -6,7 +6,7 @@ import {
 import {
   getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, addDoc, deleteDoc, deleteField, FieldPath,
 } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
-import { createSync } from "./sync.js?v=1";
+import { createSync } from "./sync.js?v=2";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCYPMUk1daN7OPukDLFKWIrFg0huIZrAxI",
@@ -64,7 +64,9 @@ function loginView() {
       notice +
       "</p>" +
       '<button class="btn sm" type="button" id="rs">비밀번호 재설정 메일 받기</button>' +
-      "</div>",
+      "</div>" +
+      '<div class="card"><h3>로그인 없이 둘러보기</h3><p class="sm">예시 데이터로 화면을 체험해 볼 수 있어요. 여기서 한 일은 저장되지 않아요.</p>' +
+      '<button class="btn grn" type="button" id="dm">체험해 보기</button></div>',
   );
   notice = "";
   const em = document.getElementById("em"),
@@ -82,6 +84,7 @@ function loginView() {
       go.disabled = false;
     }
   };
+  document.getElementById("dm").onclick = () => window.APP.demo();
   document.getElementById("rs").onclick = async () => {
     if (!em.value.trim()) {
       er.textContent = "위에 이메일을 먼저 적어 주세요";
@@ -102,6 +105,10 @@ function stopSync() {
     sync = null;
   }
 }
+window.APP.leave = () => {
+  window.APP.exitDemo();
+  loginView();
+};
 window.APP.logout = () => {
   stopSync();
   signOut(auth);

@@ -156,7 +156,7 @@ const TT = {
 };
 function R() {
   // 서버 데이터가 바뀌어 보고 있던 술약이 사라졌으면 홈으로 (로그아웃·되돌림 때)
-  if (V.id !== undefined && !S.P.find((p) => p.id == V.id)) {
+  if (["d", "plan", "start", "drunk", "cam", "pay", "rec"].includes(V.v) && !S.P.find((p) => p.id == V.id)) {
     hist = [];
     V = { v: "home" };
   }
