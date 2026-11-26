@@ -225,19 +225,19 @@ const VW = {
 <button class="btn pri" onclick="startMedia()">카메라·마이크 켜기</button>
 <details><summary>개발용 테스트 기능</summary><p class="sm">모델 연결이 안 될 때만 아래 버튼으로 테스트하세요.</p>
 <button class="btn sm" onclick="G=Date.now();tick()">손 제스처 인식됨</button><button class="btn sm" onclick="SD=Date.now();tick()">‘똑!’ 인식됨</button><button class="btn sm" onclick="fire()">수동 실행</button></details></div>
-<h2>친구들</h2>${["A", "B", "C"]
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0">${["A", "B", "C"]
       .map((k) => {
         const u = S.users[k];
-        return `<div class="card fr" onclick="go('profile','${k}')">${av(k)}<div><b>${h(u.n)}</b> ${k == S.me ? '<span class="chip">나</span>' : ""}<br><span class="chip ${FC[u.f]}">${u.f}</span></div><span>›</span></div>`;
+        return `<div class="card" style="margin:0;padding:12px 6px;text-align:center;cursor:pointer;min-width:0;box-shadow:3px 3px 0 var(--ink)" onclick="go('profile','${k}')"><div style="display:flex;justify-content:center;margin-bottom:6px">${av(k)}</div><div style="font-weight:800;overflow-wrap:anywhere">${h(u.n)}${k == S.me ? ' <span class="chip" style="margin:0;font-size:11px;padding:1px 6px">나</span>' : ""}</div><span class="chip ${FC[u.f]}" style="margin:6px 0 0">${u.f}</span></div>`;
       })
-      .join("")}
-<h2 style="margin-top:20px">술약 현황</h2>${
+      .join("")}</div>
+<h2 style="margin:34px 0 12px;font-size:24px">술약 현황</h2><div style="margin-bottom:36px">${
       ps
         .filter((p) => p.st != "ended" && p.st != "cancelled")
         .map(pc)
         .join("") ||
       '<div class="card sm">아직 술약이 없어요. 제스처로 첫 술약을 제안해 보세요.</div>'
-    }
+    }</div>
 <div class="card"><h3>📅 본가 방문 일정</h3>${calendarGrid()}</div>${songCard()}
 ${favCard()}<button class="btn" onclick="go('arc')">🗂 지난 술약 아카이브</button>`;
   },
@@ -305,9 +305,8 @@ ${favCard()}<button class="btn" onclick="go('arc')">🗂 지난 술약 아카이
       ks = ["A", "B", "C"],
       ys = ks.filter((k) => p.votes[k] == "y").length,
       isP = p.by == S.me,
-      [l, c] = ST[p.st];
-    return `<div class="card"><span class="chip ${c}">${l}</span><h3 style="margin-top:6px">${fd(p.date)} ${p.time}</h3>제안자 ${chipU(p.by)}</div>
-<div class="card"><h3>응답</h3>${ks
+      [l, c] = ST[p.st],
+      resp = `<div class="card"><h3>응답</h3>${ks
       .filter((k) => k != p.by)
       .map(
         (k) =>
@@ -326,7 +325,9 @@ ${
         .join("")}</details>`
     : ""
 }
-${p.st == "pending" ? `<p class="sm">친구 ${ys}명이 찬성했어요. 모두 찬성하면 자동으로 성립돼요.</p>${isP ? `<button class="btn" onclick="decide('cancelled')">제안 취소</button>` : ""}` : ""}</div>
+${p.st == "pending" ? `<p class="sm">친구 ${ys}명이 찬성했어요. 모두 찬성하면 자동으로 성립돼요.</p>${isP ? `<button class="btn" onclick="decide('cancelled')">제안 취소</button>` : ""}` : ""}</div>`;
+    return `<div class="card"><span class="chip ${c}">${l}</span><h3 style="margin-top:6px">${fd(p.date)} ${p.time}</h3>제안자 ${chipU(p.by)}</div>
+${p.st == "pending" ? resp : ""}
 ${p.st == "confirmed" ? `<button class="btn pri" onclick="go('plan',${p.id})">📝계획📝</button><button class="btn grn" onclick="openStart(${p.id})">🥂드가자🥂</button>` : ""}
 ${p.st == "live" ? liveTiles(p) : ""}
 ${p.st == "ended" ? `<button class="btn pri" onclick="openRec(${p.id})">📖 아카이브 </button><button class="btn" onclick="go('pay',${p.id})">💸 정산</button>` : ""}`;
