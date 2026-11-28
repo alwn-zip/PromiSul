@@ -24,7 +24,7 @@ input,textarea,select{width:100%;min-height:46px;padding:10px 12px;border:2.5px 
 .cam{position:relative;aspect-ratio:4/3;background:var(--grn);border:2.5px solid var(--ink);border-radius:18px;overflow:hidden;display:grid;place-items:center}
 .cam video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
 .frame{position:absolute;inset:14%;border:3px dashed var(--ink);border-radius:20px}
-.cam.on .big{display:none}
+.cam.on .big,.cam.on .frame{display:none}
 .big{position:relative;width:60%;max-width:200px;aspect-ratio:1;display:grid}.big img{grid-area:1/1;width:100%;height:100%;object-fit:contain}.big .hs{display:none}
 @keyframes wig{50%{transform:rotate(-12deg) scale(1.08)}}
 .pop{position:fixed;inset:0;background:var(--red);display:grid;place-items:center;font-size:90px;font-weight:900;z-index:20;animation:in .6s ease}
@@ -63,4 +63,4 @@ summary{font-weight:800;cursor:pointer;min-height:36px}
 .ul[type=number]{-moz-appearance:textfield;appearance:textfield}
 .ul:focus{outline:none;border-bottom-color:var(--ink)}
 </style></head><body><div id="top"></div><main id="app"></main>
-<script src="sketch.js?v=28"></script><script type="module" src="fb.js?v=5"></script></body></html>
+<script src="sketch.js?v=29"></script><script type="module" src="fb.js?v=5"></script></body></html>
