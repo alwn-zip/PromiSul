@@ -675,7 +675,7 @@ function recPage(p, ed) {
     : p.rounds
         .map((r, i) =>
           r.place
-            ? `<div>${i + 1}차 📍 <span class="ov">${h(r.place)}</span>${r.addr ? '<div class="s2">' + h(r.addr) + "</div>" : ""}</div>`
+            ? `<div class="rrow"><span class="rlab">${i + 1}차 📍</span><span class="ov">${h(r.place)}</span>${r.addr ? '<div class="s2 raddr">' + h(r.addr) + "</div>" : ""}</div>`
             : "",
         )
         .join("") || '<span class="s2">미입력</span>';
@@ -683,14 +683,15 @@ function recPage(p, ed) {
   const kr = ed
     ? `<button class="dk ${p.kr === true ? "on" : ""}" onclick="upd(()=>P().kr=true)">드감</button> <button class="dk ${p.kr === false ? "on" : ""}" onclick="upd(()=>P().kr=false)">안드감</button>`
     : "🎤 " + (p.kr === true ? "드감" : p.kr === false ? "안드감" : "미정");
-  const side = `<div class="bx"><div class="dl">장소</div>${rd}<div class="dl">노래방</div>${kr}</div>`;
+  const place = `<div class="bx"><div class="dl">장소</div>${rd}</div>`,
+    kbox = `<div class="bx"><div class="dl">노래방</div>${kr}</div>`;
   const pay = `<div class="bx"><div class="dl">정산 금액</div>${p.pay && p.pay.t ? `<div class="tt">${won(p.pay.t)}</div>${payHTML(p.pay, calc(p.pay.t, p.pay.x))}` : '<span class="s2">정산 전이에요</span>'}${ed ? `<div><button class="dk" onclick="go('pay',${p.id})">정산 입력·수정</button></div>` : ""}</div>`;
   const dkBox = p.drunk
     ? `<div class="bx"><div class="dl">🍺 오늘의 만취자</div><div class="pt" style="width:62%"><img src="${p.drunk.img}" alt="오늘의 만취자"></div>${ed ? `<div style="margin-top:8px"><button class="dk" onclick="openDrunk(${p.id})">다시 찍기</button> <button class="dk" onclick="upd(()=>delete P().drunk)">삭제</button></div>` : ""}</div>`
     : ed
       ? `<div class="bx"><div class="dl">🍺 오늘의 만취자</div><button class="dk" onclick="openDrunk(${p.id})">만취자 사진 남기기</button></div>`
       : "";
-  return `<div class="dy2">${strip}${head}${dkBox}<div class="g2c">${dr}${side}</div>${pay}</div>
+  return `<div class="dy2">${strip}${head}${dkBox}<div class="g2c${ed ? "" : " rv"}"><div class="gcol">${dr}${kbox}</div>${place}</div>${pay}</div>
 <button class="btn ${ed ? "grn" : "pri"}" onclick="recEdit=${!ed};R();scrollTo(0,0)">${ed ? "저장하기" : "✏️ 기록 수정"}</button>`;
 }
 function ask(msg, ok) {
@@ -983,6 +984,16 @@ const hStat = (t, pct) => {
   if (e) e.textContent = t;
   if (b && pct != null) b.style.width = Math.round(pct * 100) + "%";
 };
+// 전면 카메라(노트북 웹캠 포함)는 거울처럼 좌우를 뒤집어 보여 줘요. 후면 카메라는 그대로 둬요.
+function mirrorFront(v, st) {
+  const t = st && st.getVideoTracks()[0];
+  if (!t || !v) return;
+  const s = (t.getSettings && t.getSettings()) || {},
+    rear =
+      s.facingMode === "environment" ||
+      /back|rear|environment|후면/i.test(t.label || "");
+  v.style.transform = rear ? "none" : "scaleX(-1)";
+}
 async function startHandCam(vid, screen) {
   const run = ++hRun;
   stopMedia();
@@ -1002,6 +1013,7 @@ async function startHandCam(vid, screen) {
     return;
   }
   v.srcObject = stream2;
+  mirrorFront(v, stream2);
   hStat("로딩 중…");
   try {
     await loadHL();
@@ -1130,6 +1142,7 @@ async function startCam() {
       video: { facingMode: "environment" },
     });
     $("cv").srcObject = stream2;
+    mirrorFront($("cv"), stream2);
     $("cph").style.display = "none";
   } catch (e) {
     $("cmsg").textContent =
