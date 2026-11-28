@@ -63,7 +63,7 @@ function loginView() {
       '<p id="er" role="alert" style="color:var(--ink);font-weight:800;min-height:1.4em;margin:10px 0 0">' +
       notice +
       "</p>" +
-      '<button class="btn sm" type="button" id="rs">비밀번호 재설정 메일 받기</button>' +
+      '<button class="btn sm" type="button" id="rs">비밀번호 재설정</button>' +
       "</div>",
   );
   notice = "";
@@ -84,12 +84,12 @@ function loginView() {
   };
   document.getElementById("rs").onclick = async () => {
     if (!em.value.trim()) {
-      er.textContent = "위에 이메일을 먼저 적어 주세요";
+      er.textContent = "이메일을 적어 주세요";
       return;
     }
     try {
       await sendPasswordResetEmail(auth, em.value.trim());
-      er.textContent = "재설정 메일을 보냈어요. 메일함(스팸함도)을 확인해 주세요";
+      er.textContent = "재설정 메일을 보냈어요.";
     } catch (e) {
       er.textContent = msg(e);
     }
